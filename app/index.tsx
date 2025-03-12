@@ -1,36 +1,69 @@
 import React, { useEffect, useState } from "react";
-import { View, StyleSheet, Alert } from "react-native";
+import { View, Alert, StyleSheet } from "react-native";
+import * as Updates from "expo-updates";
 import { WebView } from "react-native-webview";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 
-export default function WebViewScreen() {
+export default function App() {
     const [permissionsGranted, setPermissionsGranted] = useState(false);
 
-    useEffect(() => {
-        const requestPermissions = async () => {
-            try {
-                const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
-                const locationPermission = await Location.requestForegroundPermissionsAsync();
-                if (cameraPermission.status === "granted" && locationPermission.status === "granted") {
-                    setPermissionsGranted(true);
-                } else {
-                    Alert.alert("Permissions Required", "Camera and Location permissions are needed for full functionality.");
-                }
-            } catch (error) {
-                console.error("Permission request error:", error);
+    const checkForUpdates = async () => {
+        try {
+            const update = await Updates.checkForUpdateAsync();
+            if (update.isAvailable) {
+                await applyUpdate();
             }
-        };
+        } catch (e) {
+            console.error("Update check failed:", e);
+        }
+    };
 
-        requestPermissions();
+    const applyUpdate = async () => {
+        try {
+            await Updates.fetchUpdateAsync();
+            await Updates.reloadAsync();
+        } catch (e) {
+            console.error("Update fetch failed:", e);
+        }
+    };
+
+    const requestPermissions = async () => {
+        try {
+            const { status: cameraStatus } = await ImagePicker.requestCameraPermissionsAsync();
+            const { status: mediaLibraryStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            const { status: locationStatus } = await Location.requestForegroundPermissionsAsync();
+
+            if (cameraStatus === "granted" && mediaLibraryStatus === "granted" && locationStatus === "granted") {
+                setPermissionsGranted(true);
+            } else {
+                Alert.alert("Permissions Required", "Camera, Media Library, and Location permissions are needed for full functionality.");
+            }
+        } catch (error) {
+            console.error("Permission request error:", error);
+        }
+    };
+
+    useEffect(() => {
+        (async () => {
+            await checkForUpdates();
+            await requestPermissions();
+        })();
     }, []);
+
+    if (!permissionsGranted) {
+        Alert.alert("Permissions Required", "Please grant necessary permissions in settings.");
+    }
 
     return (
         <View style={styles.container}>
             <WebView
-                source={{ uri: "https://genius-dev.aboitizpower.com/mygenius2/offlineLAC.php" }}
+                source={{ uri: "https://genius.aboitizpower.com/mygenius2/offlineLAC.php" }}
                 mediaPlaybackRequiresUserAction={false}
                 allowsInlineMediaPlayback
+                geolocationEnabled={true}
+                javaScriptEnabled={true}
+                domStorageEnabled={true}
             />
         </View>
     );
