@@ -1,76 +1,79 @@
-import React, { useEffect, useState } from "react";
-import { View, Alert, StyleSheet } from "react-native";
-import * as Updates from "expo-updates";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useRef } from "react";
+import { View, Button, StyleSheet } from "react-native";
 import { WebView } from "react-native-webview";
-import * as ImagePicker from "expo-image-picker";
-import * as Location from "expo-location";
 
-export default function App() {
-    const [permissionsGranted, setPermissionsGranted] = useState(false);
+const MyWebView = () => {
+    const webviewRef = useRef<WebView | null>(null);
+    const router = useRouter();
+    const params = useLocalSearchParams();
 
-    const checkForUpdates = async () => {
-        try {
-            const update = await Updates.checkForUpdateAsync();
-            if (update.isAvailable) {
-                await applyUpdate();
-            }
-        } catch (e) {
-            console.error("Update check failed:", e);
+    const returned_latitude = params.latitude ? parseFloat(params.latitude as string) : 7.0107;
+    const returned_longitude = params.longitude ? parseFloat(params.longitude as string) : 125.5754;
+    const sendMessageToWebView = () => {
+        const jsCode = `
+    
+            document.body.style.backgroundColor = 'red';
+            alert('Message sent from React Native! ' + ${returned_latitude} + ' ' + ${returned_longitude});
+        `;
+        if (webviewRef.current) {
+            webviewRef.current.injectJavaScript(jsCode);
         }
     };
-
-    const applyUpdate = async () => {
-        try {
-            await Updates.fetchUpdateAsync();
-            await Updates.reloadAsync();
-        } catch (e) {
-            console.error("Update fetch failed:", e);
-        }
-    };
-
-    const requestPermissions = async () => {
-        try {
-            const { status: cameraStatus } = await ImagePicker.requestCameraPermissionsAsync();
-            const { status: mediaLibraryStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            const { status: locationStatus } = await Location.requestForegroundPermissionsAsync();
-
-            if (cameraStatus === "granted" && mediaLibraryStatus === "granted" && locationStatus === "granted") {
-                setPermissionsGranted(true);
-            } else {
-                Alert.alert("Permissions Required", "Camera, Media Library, and Location permissions are needed for full functionality.");
-            }
-        } catch (error) {
-            console.error("Permission request error:", error);
-        }
-    };
-
-    useEffect(() => {
-        (async () => {
-            await checkForUpdates();
-            await requestPermissions();
-        })();
-    }, []);
-
-    if (!permissionsGranted) {
-        Alert.alert("Permissions Required", "Please grant necessary permissions in settings.");
-    }
 
     return (
         <View style={styles.container}>
             <WebView
-                source={{ uri: "https://genius.aboitizpower.com/mygenius2/offlineLAC.php" }}
-                mediaPlaybackRequiresUserAction={false}
-                allowsInlineMediaPlayback
-                geolocationEnabled={true}
-                javaScriptEnabled={true}
-                domStorageEnabled={true}
+                ref={webviewRef}
+                source={{
+                    html: `
+                        <!DOCTYPE html>
+                        <html lang="en">
+                        <head>
+                            <meta charset="UTF-8">
+                            <meta name="viewport" content="width=device-width, initial-scale=1">
+                            <title>WebView Communication</title>
+                            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+                        </head>
+                        <body class="d-flex flex-column align-items-center justify-content-center vh-100">
+                            <div class="container text-center">
+                                <h1 class="mb-4">WebView Example</h1>
+                                <button id="sendMessageButton" class="btn btn-primary">Send Message to React Native</button>
+                            </div>
+                            <script>
+                                document.getElementById('sendMessageButton').onclick = function() {
+                                    const data = JSON.stringify({ latitude: 14.82367039, longitude: 120.2839084 });
+                                    window.ReactNativeWebView.postMessage(data);
+                                };
+                            </script>
+                            <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+                        </body>
+                        </html>
+                    `,
+                }}
+                onMessage={(event) => {
+                    try {
+                        const { latitude, longitude } = JSON.parse(event.nativeEvent.data);
+                        router.push({
+                            pathname: "/page6_location",
+                            params: { latitude, longitude },
+                        });
+                    } catch (error) {
+                        console.error("Error parsing message:", error);
+                    }
+                }}
             />
+            <Button title="Send Message to WebView" onPress={sendMessageToWebView} />
         </View>
     );
-}
+};
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+        justifyContent: "center",
+        paddingTop: 50,
     },
 });
+
+export default MyWebView;
